@@ -1,22 +1,3 @@
-
-//val sBox = arrayOf(
-//    arrayOf("63","7C","77","7B","F2","6B","6F","C5","30","01","67","2B","FE","D7","AB","76"),
-//    arrayOf("CA","82","C9","7D","FA","59","47","F0","AD","D4","A2","AF","9C","A4","72","C0"),
-//    arrayOf("B7","FD","93","26","36","3F","F7","CC","34","A5","E5","F1","71","D8","31","15"),
-//    arrayOf("04","C7","23","C3","18","96","05","9A","07","12","80","E2","EB","27","B2","75"),
-//    arrayOf("09","83","2C","1A","1B","6E","5A","A0","52","3B","D6","B3","29","E3","2F","84"),
-//    arrayOf("53","D1","00","ED","20","FC","B1","5B","6A","CB","BE","39","4A","4C","58","CF"),
-//    arrayOf("D0","EF","AA","FB","43","4D","33","85","45","F9","02","7F","50","3C","9F","A8"),
-//    arrayOf("51","A3","40","8F","92","9D","38","F5","BC","B6","DA","21","10","FF","F3","D2"),
-//    arrayOf("CD","0C","13","EC","5F","97","44","17","C4","A7","7E","3D","64","5D","19","73"),
-//    arrayOf("60","81","4F","DC","22","2A","90","88","46","EE","B8","14","DE","5E","0B","DB"),
-//    arrayOf("E0","32","3A","0A","49","06","24","5C","C2","D3","AC","62","91","95","E4","79"),
-//    arrayOf("E7","C8","37","6D","8D","D5","4E","A9","6C","56","F4","EA","65","7A","AE","08"),
-//    arrayOf("BA","78","25","2E","1C","A6","B4","C6","E8","DD","74","1F","4B","BD","8B","8A"),
-//    arrayOf("70","3E","B5","66","48","03","F6","0E","61","35","57","B9","86","C1","1D","9E"),
-//    arrayOf("E1","F8","98","11","69","D9","8E","94","9B","1E","87","E9","CE","55","28","DF"),
-//    arrayOf("8C","A1","89","0D","BF","E6","42","68","41","99","2D","0F","B0","54","BB","16")
-//
 val sBox = arrayOf(
     arrayOf(0x63, 0x7C, 0x77, 0x7B, 0xF2, 0x6B, 0x6F, 0xC5, 0x30, 0x01, 0x67, 0x2B, 0xFE, 0xD7, 0xAB, 0x76),
     arrayOf(0xCA, 0x82, 0xC9, 0x7D, 0xFA, 0x59, 0x47, 0xF0, 0xAD, 0xD4, 0xA2, 0xAF, 0x9C, 0xA4, 0x72, 0xC0),
@@ -76,6 +57,13 @@ fun Int.throughSBox() : Int{
     val second = hex[1].fromHexToInt()
     return throughSBox(first,second)
 }
+fun Int.throughISBox() : Int{
+    var hex = Integer.toHexString(this)
+    hex = padByte(hex)
+    val first = hex[0].fromHexToInt()
+    val second = hex[1].fromHexToInt()
+    return throughISBox(first,second)
+}
 fun Char.fromHexToInt() : Int {
     return if(this in '0'..'9'){
         this.code - '0'.code
@@ -86,11 +74,23 @@ fun Char.fromHexToInt() : Int {
 fun throughSBox(leftMost : Int,rightMost : Int) : Int{
     return sBox[leftMost][rightMost]
 }
+fun throughISBox(leftMost : Int,rightMost : Int) : Int{
+    return isBox[leftMost][rightMost]
+}
 fun blockToIntArray(block : String) : Array<Array<Int>>{
     val res = Array(4){Array(4){0} }
     for(i in 0 until 4){
         for(j in 0 until 4){
             res[i][j] = "${block[2*(4*i+j)]}${block[2*(4*i+j)+1]}".toInt(16)
+        }
+    }
+    return res
+}
+fun intArrayToBlock(state : Array<Array<Int>>) : String{
+    var res = ""
+    for(i in 0 until 4){
+        for(j in 0 until 4){
+            res += Integer.toHexString(state[i][j])
         }
     }
     return res
@@ -107,6 +107,9 @@ fun rotWord(word : Array<Int>,degree : Int ) : Array<Int>{
 fun subByte(byte : Int ) : Int{
     return byte.throughSBox()
 }
+fun invSubByte(byte : Int) : Int{
+    return byte.throughISBox()
+}
 // Pad a zero in front of a one-length string to present a 2 character byte ( 0x9 -> 0x09 )
 fun padByte(str : String) : String{
     var res = str
@@ -122,6 +125,7 @@ fun subWord(word : Array<Int>) : Array<Int>{
     }
     return word
 }
+
 // Xor the first byte of a word with the round constant
 fun rCon(word : Array<Int>,round : Int) : Array<Int>{
     word[0] = word[0] xor roundConstant[round]
@@ -185,6 +189,17 @@ fun shiftRow(state : Array<Array<Int>>) {
         }
     }
 }
+fun invShiftRow(state : Array<Array<Int>>){
+    for(i in 1 until 4){
+        for(k in 0 until i){
+            val temp = state[3][i]
+            for (j in 3 downTo 1){
+                state[j][i] = state[j-1][i]
+            }
+            state[0][i] = temp
+        }
+    }
+}
 fun mixColumn(state : Array<Array<Int>>) : Array<Array<Int>>{
     val  temp = Array(4){Array(4){0} }
     for(i in 0 until 4){
@@ -196,14 +211,34 @@ fun mixColumn(state : Array<Array<Int>>) : Array<Array<Int>>{
     }
     return temp
 }
+fun invMixColumn(state : Array<Array<Int>>) : Array<Array<Int>>{
+    val temp = Array(4){Array(4){0} }
+    for(i in 0 until 4){
+        for(j in 0 until 4){
+            for(k in 0 until 4){
+                temp[j][i] = temp[j][i] xor byteMultiplication(invMixCol[i][k],state[j][k])
+            }
+        }
+    }
+    return temp
+}
 fun addRoundKey(state : Array<Array<Int>>,round : Int){
     for(i in 0 until 4){
         state[i] = xorWord(state[i], word[4*round + i])
     }
 }
 fun subState(state : Array<Array<Int>>){
-    for(j in  0 until 4){
-        state[j] = subWord(state[j])
+    for(i in  0 until 4){
+        for(j in 0 until 4){
+            state[i][j] = subByte(state[i][j])
+        }
+    }
+}
+fun invSubState(state: Array<Array<Int>>){
+    for(i in  0 until 4){
+        for(j in 0 until 4){
+            state[i][j] = invSubByte(state[i][j])
+        }
     }
 }
 fun displayText(text : Array<Array<Int>>) {
@@ -216,9 +251,10 @@ fun displayText(text : Array<Array<Int>>) {
 }
 fun main() {
     wordArrayInitialize()
-    val plainText = "0123456789abcdeffedcba9876543210"
+    var plainText = "0123456789abcdeffedcba9876543210"
     var state = blockToIntArray(plainText)
     // Add the first Round Key
+    println("Encryption process start")
     addRoundKey(state,0)
     // From Round 1 to 9 perform the following step sequentially SubByte , ShiftRow , MixColumn , Add Round Key
     for (i in 1..9) {
@@ -233,5 +269,25 @@ fun main() {
     addRoundKey(state,10)
 
     displayText(state)
+
+    println("Decryption process start")
+
+    addRoundKey(state,10)
+
+    for(i in 9 downTo 1){
+
+        invShiftRow(state)
+        invSubState(state)
+        addRoundKey(state,i)
+        state = invMixColumn(state)
+    }
+    invShiftRow(state)
+    invSubState(state)
+    addRoundKey(state,0)
+
+    displayText(state)
+
+    plainText = intArrayToBlock(state)
+    println(plainText)
 }
 
