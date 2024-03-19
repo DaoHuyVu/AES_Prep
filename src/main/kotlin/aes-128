@@ -46,9 +46,9 @@ val invMixCol = arrayOf(
     arrayOf(0x0d, 0x09, 0x0e, 0x0b),
     arrayOf(0x0b, 0x0d, 0x09, 0x0e)
 )
-const val bits_128_key = "ec26d4ee1eccbda8b659cbb1220a94c9491e7386ea9b53930001e49f165c57b2"
-val roundConstant = arrayOf(0,0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80,0x1b,0x36,0x6c,0xd8,0xab,0x4d,0x9a,0x2f,0x5e,0xbc)
-val word = Array(60){Array(4){0} }
+const val bits_128_key = "0f1571c947d9e8590cb7add6af7f6798"
+val roundConstant = arrayOf(0,0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80,0x1b,0x36,0x6c,0xd8,0xab,0x4d,0x9a)
+val word = Array(44){Array(4){0} }
 // Convert an integer to Hex and return integer value of that hex
 fun Int.throughSBox() : Int{
     var hex = Integer.toHexString(this)
@@ -96,10 +96,10 @@ fun intArrayToBlock(state : Array<Array<Int>>) : String{
     return res
 }
 // Perform n-byte circular left shift on a word
-fun rotWord(word : Array<Int>) : Array<Int>{
+fun rotWord(word : Array<Int>,degree : Int ) : Array<Int>{
     val temp = word[0]
     for(i in 0 until 3){
-        word[i] = word[i+1]
+        word[i] = word[i+degree]
     }
     word[3] = temp
     return word
@@ -158,19 +158,19 @@ fun xorWord(word1 : Array<Int>,word2 : Array<Int>) : Array<Int>{
     return word1
 }
 
-fun keyExpansion(){
-    for(i in 0 until 8){
+fun wordArrayInitialize(){
+    for(i in 0 until 4){
         for(j in 0 until 4){
             word[i][j] = "${bits_128_key[2*(4*i+j)]}${bits_128_key[2*(4*i+j)+1]}".toInt(16)
         }
     }
-    for(i in 8 until 60){
+    for(i in 4 until 44){
         for(j in 0 until 4){
             var temp = word[i-1].clone()
             if(i%4 == 0){
-                temp = rCon(subWord(rotWord(temp)),i/8)
+                temp = rCon(subWord(rotWord(temp,1)),i/4)
             }
-            word[i] = xorWord(temp,word[i-8])
+            word[i] = xorWord(temp,word[i-4])
         }
     }
 }
@@ -250,14 +250,14 @@ fun displayText(text : Array<Array<Int>>) {
     }
 }
 fun main() {
-    keyExpansion()
+    wordArrayInitialize()
     var plainText = "0123456789abcdeffedcba9876543210"
     var state = blockToIntArray(plainText)
     // Add the first Round Key
     println("Encryption process start")
     addRoundKey(state,0)
     // From Round 1 to 9 perform the following step sequentially SubByte , ShiftRow , MixColumn , Add Round Key
-    for (i in 1..13) {
+    for (i in 1..9) {
         subState(state)
         shiftRow(state)
         state = mixColumn(state)
@@ -266,15 +266,15 @@ fun main() {
     //For Round 10 , perform the same stages as others except MixColumn is excluded
     subState(state)
     shiftRow(state)
-    addRoundKey(state,14)
+    addRoundKey(state,10)
 
     displayText(state)
 
     println("Decryption process start")
 
-    addRoundKey(state,14)
+    addRoundKey(state,10)
 
-    for(i in 13 downTo 1){
+    for(i in 9 downTo 1){
 
         invShiftRow(state)
         invSubState(state)

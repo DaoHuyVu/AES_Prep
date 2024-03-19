@@ -46,9 +46,9 @@ val invMixCol = arrayOf(
     arrayOf(0x0d, 0x09, 0x0e, 0x0b),
     arrayOf(0x0b, 0x0d, 0x09, 0x0e)
 )
-const val bits_128_key = "ec26d4ee1eccbda8b659cbb1220a94c9491e7386ea9b53930001e49f165c57b2"
+const val bits_128_key = "8e73b0f7da0e6452c810f32b809079e562f8ead2522c6b7b"
 val roundConstant = arrayOf(0,0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80,0x1b,0x36,0x6c,0xd8,0xab,0x4d,0x9a,0x2f,0x5e,0xbc)
-val word = Array(60){Array(4){0} }
+val word = Array(52){Array(4){0} }
 // Convert an integer to Hex and return integer value of that hex
 fun Int.throughSBox() : Int{
     var hex = Integer.toHexString(this)
@@ -159,18 +159,18 @@ fun xorWord(word1 : Array<Int>,word2 : Array<Int>) : Array<Int>{
 }
 
 fun keyExpansion(){
-    for(i in 0 until 8){
+    for(i in 0 until 6){
         for(j in 0 until 4){
             word[i][j] = "${bits_128_key[2*(4*i+j)]}${bits_128_key[2*(4*i+j)+1]}".toInt(16)
         }
     }
-    for(i in 8 until 60){
+    for(i in 6 until 52){
         for(j in 0 until 4){
             var temp = word[i-1].clone()
             if(i%4 == 0){
-                temp = rCon(subWord(rotWord(temp)),i/8)
+                temp = rCon(subWord(rotWord(temp)),i/6)
             }
-            word[i] = xorWord(temp,word[i-8])
+            word[i] = xorWord(temp,word[i-6])
         }
     }
 }
@@ -257,7 +257,7 @@ fun main() {
     println("Encryption process start")
     addRoundKey(state,0)
     // From Round 1 to 9 perform the following step sequentially SubByte , ShiftRow , MixColumn , Add Round Key
-    for (i in 1..13) {
+    for (i in 1..11) {
         subState(state)
         shiftRow(state)
         state = mixColumn(state)
@@ -266,15 +266,15 @@ fun main() {
     //For Round 10 , perform the same stages as others except MixColumn is excluded
     subState(state)
     shiftRow(state)
-    addRoundKey(state,14)
+    addRoundKey(state,12)
 
     displayText(state)
 
     println("Decryption process start")
 
-    addRoundKey(state,14)
+    addRoundKey(state,12)
 
-    for(i in 13 downTo 1){
+    for(i in 11 downTo 1){
 
         invShiftRow(state)
         invSubState(state)
