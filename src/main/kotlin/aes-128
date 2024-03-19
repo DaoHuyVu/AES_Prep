@@ -1,3 +1,5 @@
+import kotlin.math.ceil
+
 val sBox = arrayOf(
     arrayOf(0x63, 0x7C, 0x77, 0x7B, 0xF2, 0x6B, 0x6F, 0xC5, 0x30, 0x01, 0x67, 0x2B, 0xFE, 0xD7, 0xAB, 0x76),
     arrayOf(0xCA, 0x82, 0xC9, 0x7D, 0xFA, 0x59, 0x47, 0xF0, 0xAD, 0xD4, 0xA2, 0xAF, 0x9C, 0xA4, 0x72, 0xC0),
@@ -77,22 +79,93 @@ fun throughSBox(leftMost : Int,rightMost : Int) : Int{
 fun throughISBox(leftMost : Int,rightMost : Int) : Int{
     return isBox[leftMost][rightMost]
 }
-fun blockToIntArray(block : String) : Array<Array<Int>>{
-    val res = Array(4){Array(4){0} }
+fun plainTextToIntArray(plainText : String,blocks : Int) : Array<Array<Array<Int>>>{
+    /* Blocks + 1 in case the plainText is perfectly distributed to block.
+        In that case , the last block contains all the value of 0x10 to overcome
+        the confusing with the last byte of a block being 0x01
+    */
+
+    val res = Array(blocks+1){Array(4){Array(4){0} }}
+    var count = 0
+    for(k in 0 until blocks){
+        for(i in 0 until 4){
+            for(j in 0 until 4 ){
+                if(count < plainText.length){
+                    res[k][i][j] = plainText[count].code
+                    count++
+                }
+                else{
+                    var a = i
+                    // Store the current value of j
+                    var c = j
+                    while(a < 4){
+                        var b = c
+                        while(b < 4){
+                            res[k][a][b] = 16 - plainText.length%16
+                            b++
+                        }
+                        a++
+                        // Since 'a' receives a new value , b has to be reset to 0
+                        c = 0
+                    }
+                    return res
+                }
+            }
+        }
+    }
     for(i in 0 until 4){
         for(j in 0 until 4){
-            res[i][j] = "${block[2*(4*i+j)]}${block[2*(4*i+j)+1]}".toInt(16)
+            res[blocks][i][j] = 0x10
         }
     }
     return res
 }
-fun intArrayToBlock(state : Array<Array<Int>>) : String{
+fun intArrayToPlainText(state : Array<Array<Array<Int>>>,blocks : Int) : String{
     var res = ""
-    for(i in 0 until 4){
-        for(j in 0 until 4){
-            res += Integer.toHexString(state[i][j])
-        }
-    }
+   for(k in 0 until blocks){
+       if(k == blocks - 1){
+           if(state[k][3][3] <= 15){
+               var temp = state[k][3][3]
+               var isPadded = true
+               var i = 3
+               var j = 3
+               while(temp > 0){
+                   if(state[k][i][j] != state[k][3][3]){
+                       isPadded = false
+                       break
+                   }
+                   j--
+                   if(j == -1){
+                       i--
+                       j = 3
+                   }
+                   temp--
+               }
+               if(isPadded){
+                    if(0 == state[k+1][0][0]){
+                        i = 0
+                        j = 0
+                        temp = 0
+                        while(temp < 16 - state[k][3][3]){
+                            res += state[k][i][j].toChar()
+                            j++
+                            if(j == 4){
+                                i++
+                                j = 0
+                            }
+                            temp++
+                        }
+                        return res
+                    }
+               }
+           }
+       }
+       for(i in 0 until 4){
+           for(j in 0 until 4){
+               res += state[k][i][j].toChar()
+           }
+       }
+   }
     return res
 }
 // Perform n-byte circular left shift on a word
@@ -118,6 +191,7 @@ fun padByte(str : String) : String{
     }
     return res
 }
+
 // Map a word using S-BOX
 fun subWord(word : Array<Int>) : Array<Int>{
     for(i in 0 until 4){
@@ -248,46 +322,45 @@ fun displayText(text : Array<Array<Int>>) {
         }
         println()
     }
+    println()
 }
 fun main() {
     wordArrayInitialize()
-    var plainText = "0123456789abcdeffedcba9876543210"
-    var state = blockToIntArray(plainText)
-    // Add the first Round Key
-    println("Encryption process start")
-    addRoundKey(state,0)
-    // From Round 1 to 9 perform the following step sequentially SubByte , ShiftRow , MixColumn , Add Round Key
-    for (i in 1..9) {
-        subState(state)
-        shiftRow(state)
-        state = mixColumn(state)
-        addRoundKey(state,i)
+    var plainText = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."
+    val blocks = ceil(plainText.length/16.0).toInt()
+    val state = plainTextToIntArray(plainText,blocks)
+    //Add the first Round Key
+    println("Encrypted text : ")
+    for(n in 0 until blocks){
+        addRoundKey(state[n],0)
+        // From Round 1 to 9 perform the following step sequentially SubByte , ShiftRow , MixColumn , Add Round Key
+        for (i in 1..9) {
+            subState(state[n])
+            shiftRow(state[n])
+            state[n] = mixColumn(state[n])
+            addRoundKey(state[n],i)
+        }
+        //For Round 10 , perform the same stages as others except MixColumn is excluded
+        subState(state[n])
+        shiftRow(state[n])
+        addRoundKey(state[n],10)
+
+        displayText(state[n])
     }
-    //For Round 10 , perform the same stages as others except MixColumn is excluded
-    subState(state)
-    shiftRow(state)
-    addRoundKey(state,10)
-
-    displayText(state)
-
-    println("Decryption process start")
-
-    addRoundKey(state,10)
-
-    for(i in 9 downTo 1){
-
-        invShiftRow(state)
-        invSubState(state)
-        addRoundKey(state,i)
-        state = invMixColumn(state)
+    println("Decrypted text : ")
+    for(n in 0 until blocks){
+        addRoundKey(state[n],10)
+        for(i in 9 downTo 1){
+            invShiftRow(state[n])
+            invSubState(state[n])
+            addRoundKey(state[n],i)
+            state[n] = invMixColumn(state[n])
+        }
+        invShiftRow(state[n])
+        invSubState(state[n])
+        addRoundKey(state[n],0)
     }
-    invShiftRow(state)
-    invSubState(state)
-    addRoundKey(state,0)
-
-    displayText(state)
-
-    plainText = intArrayToBlock(state)
+    plainText = intArrayToPlainText(state,blocks)
     println(plainText)
 }
 
