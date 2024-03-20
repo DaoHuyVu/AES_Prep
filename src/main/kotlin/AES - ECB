@@ -338,14 +338,12 @@ fun main() {
     println("Encrypted text : ")
     for(n in 0 until blocks){
         addRoundKey(state[n],0)
-        // From Round 1 to 9 perform the following step sequentially SubByte , ShiftRow , MixColumn , Add Round Key
         for (i in 1 until numOfRound) {
             subState(state[n])
             shiftRow(state[n])
             state[n] = mixColumn(state[n])
             addRoundKey(state[n],i)
         }
-        //For Round 10 , perform the same stages as others except MixColumn is excluded
         subState(state[n])
         shiftRow(state[n])
         addRoundKey(state[n],numOfRound)
