@@ -48,10 +48,16 @@ val invMixCol = arrayOf(
     arrayOf(0x0d, 0x09, 0x0e, 0x0b),
     arrayOf(0x0b, 0x0d, 0x09, 0x0e)
 )
-const val bits_128_key = "ec26d4ee1eccbda8b659cbb1220a94c9491e7386ea9b53930001e49f165c57b2"
+// 16 bytes 0f1571c947d9e8590cb7add6af7f6798
+// 24 bytes 8e73b0f7da0e6452c810f32b809079e562f8ead2522c6b7b
+// 32 bytes ec26d4ee1eccbda8b659cbb1220a94c9491e7386ea9b53930001e49f165c57b2
+val keyMap = mapOf(16 to 44,24 to 52,32 to 60)
+val roundMap = mapOf(16 to 10,24 to 12,32 to 14)
+const val secretKey = "0f1571c947d9e8590cb7add6af7f6798"
+const val keyLength = secretKey.length/2
 val roundConstant = arrayOf(0,0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80,0x1b,0x36,0x6c,0xd8,0xab,0x4d,0x9a)
-val word = Array(60){Array(4){0} }
-// Convert an integer to Hex and return integer value of that hex
+val word = Array(keyMap[keyLength]!!){Array(4){0} }
+
 fun Int.throughSBox() : Int{
     var hex = Integer.toHexString(this)
     hex = padByte(hex)
@@ -122,26 +128,26 @@ fun plainTextToIntArray(plainText : String,blocks : Int) : Array<Array<Array<Int
 }
 fun intArrayToPlainText(state : Array<Array<Array<Int>>>,blocks : Int) : String{
     var res = ""
-   for(k in 0 until blocks){
-       if(k == blocks - 1){
-           if(state[k][3][3] <= 15){
-               var temp = state[k][3][3]
-               var isPadded = true
-               var i = 3
-               var j = 3
-               while(temp > 0){
-                   if(state[k][i][j] != state[k][3][3]){
-                       isPadded = false
-                       break
-                   }
-                   j--
-                   if(j == -1){
-                       i--
-                       j = 3
-                   }
-                   temp--
-               }
-               if(isPadded){
+    for(k in 0 until blocks){
+        if(k == blocks - 1){
+            if(state[k][3][3] <= 15){
+                var temp = state[k][3][3]
+                var isPadded = true
+                var i = 3
+                var j = 3
+                while(temp > 0){
+                    if(state[k][i][j] != state[k][3][3]){
+                        isPadded = false
+                        break
+                    }
+                    j--
+                    if(j == -1){
+                        i--
+                        j = 3
+                    }
+                    temp--
+                }
+                if(isPadded){
                     if(0 == state[k+1][0][0]){
                         i = 0
                         j = 0
@@ -157,15 +163,15 @@ fun intArrayToPlainText(state : Array<Array<Array<Int>>>,blocks : Int) : String{
                         }
                         return res
                     }
-               }
-           }
-       }
-       for(i in 0 until 4){
-           for(j in 0 until 4){
-               res += state[k][i][j].toChar()
-           }
-       }
-   }
+                }
+            }
+        }
+        for(i in 0 until 4){
+            for(j in 0 until 4){
+                res += state[k][i][j].toChar()
+            }
+        }
+    }
     return res
 }
 // Perform n-byte circular left shift on a word
@@ -233,18 +239,18 @@ fun xorWord(word1 : Array<Int>,word2 : Array<Int>) : Array<Int>{
 }
 
 fun keyExpansion(){
-    for(i in 0 until 8){
+    for(i in 0 until keyLength/4){
         for(j in 0 until 4){
-            word[i][j] = "${bits_128_key[2*(4*i+j)]}${bits_128_key[2*(4*i+j)+1]}".toInt(16)
+            word[i][j] = "${secretKey[2*(4*i+j)]}${secretKey[2*(4*i+j)+1]}".toInt(16)
         }
     }
-    for(i in 8 until 60){
+    for(i in keyLength/4 until keyMap[keyLength]!!){
         for(j in 0 until 4){
-            var temp = word[i-1].clone()
-            if(i%4 == 0){
-                temp = rCon(subWord(rotWord(temp,1)),i/8)
+            var temp = word[i-1]
+            if(i%(keyLength/4) == 0){
+                temp = rCon(subWord(rotWord(temp,1)),i/(keyLength/4))
             }
-            word[i] = xorWord(temp,word[i-8])
+            word[i] = xorWord(temp,word[i-(keyLength/4)])
         }
     }
 }
@@ -301,6 +307,11 @@ fun addRoundKey(state : Array<Array<Int>>,round : Int){
         state[i] = xorWord(state[i], word[4*round + i])
     }
 }
+fun xor4Words(state : Array<Array<Int>>,iV : Array<Array<Int>>){
+    for(i in 0 until 4){
+        state[i] = xorWord(state[i], iV[i])
+    }
+}
 fun subState(state : Array<Array<Int>>){
     for(i in  0 until 4){
         for(j in 0 until 4){
@@ -315,42 +326,69 @@ fun invSubState(state: Array<Array<Int>>){
         }
     }
 }
-fun displayText(text : Array<Array<Int>>) {
-    for(i in 0 until 4){
+fun displayEncryptedText(state : Array<Array<Array<Int>>>,blocks : Int) {
+    for(i in 0 until blocks){
         for(j in 0 until 4){
-            print("${padByte(Integer.toHexString(text[j][i]))} ")
+            for(k in 0 until 4){
+                print(padByte(Integer.toHexString(state[i][k][j])))
+            }
         }
-        println()
     }
     println()
 }
+fun iV() : Array<Array<Int>>{
+    val temp = "%03d%d".format(0,System.currentTimeMillis())
+    val res = Array(4){Array(4){0} }
+    for(i in 0 until 4){
+        for(j in 0 until 4){
+            res[i][j] = temp[4*i+j].fromHexToInt()
+        }
+    }
+    return res
+
+}
+fun copy(a1 : Array<Array<Int>>,a2 : Array<Array<Int>>){
+    for(i in 0 until 4){
+        for(j in 0 until 4){
+            a2[i][j] = a1[i][j]
+        }
+    }
+}
 fun main() {
     keyExpansion()
-    var plainText = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."
+     var plainText = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."
     val blocks = ceil(plainText.length/16.0).toInt()
     val state = plainTextToIntArray(plainText,blocks)
-    //Add the first Round Key
+    val initializationVector = iV()
+    var iVTemp = initializationVector
+    val numOfRound = roundMap[keyLength]!!
     println("Encrypted text : ")
     for(n in 0 until blocks){
+        // Cn = E(Kn,( Pn xor IVn))
+        xor4Words(state[n],iVTemp)
         addRoundKey(state[n],0)
-        // From Round 1 to 9 perform the following step sequentially SubByte , ShiftRow , MixColumn , Add Round Key
-        for (i in 1..13) {
+        for (i in 1 until numOfRound) {
             subState(state[n])
             shiftRow(state[n])
             state[n] = mixColumn(state[n])
             addRoundKey(state[n],i)
         }
-        //For Round 10 , perform the same stages as others except MixColumn is excluded
         subState(state[n])
         shiftRow(state[n])
-        addRoundKey(state[n],14)
-
-        displayText(state[n])
+        addRoundKey(state[n],numOfRound)
+        // IVn = Cn
+        iVTemp = state[n]
     }
+    displayEncryptedText(state,blocks)
+    iVTemp = initializationVector
     println("Decrypted text : ")
     for(n in 0 until blocks){
-        addRoundKey(state[n],14)
-        for(i in 13 downTo 1){
+        // Store Cn
+        val temp = Array(4){Array(4){0} }
+        copy(state[n],temp)
+        // Pn = IVn xor D(Kn,Cn)
+        addRoundKey(state[n],numOfRound)
+        for(i in numOfRound-1 downTo 1){
             invShiftRow(state[n])
             invSubState(state[n])
             addRoundKey(state[n],i)
@@ -359,8 +397,12 @@ fun main() {
         invShiftRow(state[n])
         invSubState(state[n])
         addRoundKey(state[n],0)
+        xor4Words(state[n],iVTemp)
+
+        iVTemp = temp
     }
     plainText = intArrayToPlainText(state,blocks)
     println(plainText)
+
 }
 
